@@ -118,7 +118,7 @@ function readcase(casefilename, costsfilename, refbus, loadscale, thermalLimitSc
     buses = Bus[]
     for i in 1:size(busmat,1)
         @assert busmat[i,1] == i # indexed in order
-        bustype = int(busmat[i,2])
+        bustype = round(Int,(busmat[i,2]))
         Pd = busmat[i,3]
         Qd = busmat[i,4]
         Gs = busmat[i,5]
@@ -140,7 +140,7 @@ function readcase(casefilename, costsfilename, refbus, loadscale, thermalLimitSc
     generatorlist = Int[]
     genmat = case["gen"]
     for i in 1:size(genmat,1)
-        busidx = int(genmat[i,1])
+        busidx = round(Int,genmat[i,1])
         Pg = genmat[i,2]
         Qg = genmat[i,3]
         Pgmax = loadscale*genmat[i,9]
@@ -161,8 +161,8 @@ function readcase(casefilename, costsfilename, refbus, loadscale, thermalLimitSc
     branchmat = case["branch"]
     lines = Line[]
     for i in 1:size(branchmat,1)
-        fbus = int(branchmat[i,1])
-        tbus = int(branchmat[i,2])
+        fbus = round(Int,branchmat[i,1])
+        tbus = round(Int,branchmat[i,2])
         x = branchmat[i,4]
         y = 1/x
         u = branchmat[i,6]
@@ -181,7 +181,7 @@ function readcase(casefilename, costsfilename, refbus, loadscale, thermalLimitSc
     if costsfilename != "none"
         costsmat = readcsv(costsfilename, Float64)
         for i in 1:size(costsmat,1)
-            busid = int(costsmat[i,1])
+            busid = round(Int,costsmat[i,1])
             @assert length(buses[busid].genids) == 1
             buses[busid].pi2 = costsmat[i,2] # quadratic coefficient
             buses[busid].pi1 = costsmat[i,3] # linear coefficient
@@ -201,7 +201,7 @@ function readconfig(configfilename)
     println("\nreading config $configfilename")
     refbus = 0
     uniformalphas = false
-    
+
     lines = readlines(open(configfilename,"r"))
 
     numlines = length(lines)
@@ -221,8 +221,8 @@ function readconfig(configfilename)
     extras = Dict()
 
     for l in lines
-        beginswith(l,'#') && continue
-        
+        startswith(l,'#') && continue
+
         thisline = split(l)
         length(thisline) > 0 || continue
         if thisline[1] == "END"
@@ -234,7 +234,7 @@ function readconfig(configfilename)
         elseif thisline[1] == "costs"
             costsfilename = thisline[2]
         elseif thisline[1] == "refbus"
-            refbus = int(thisline[2])
+            refbus = parse(Int,(thisline[2]))
         elseif thisline[1] == "line_probability_threshold"
             line_probability_threshold = float(thisline[2])
             println(">>>> line_probability_threshold = $line_probability_threshold")
@@ -286,7 +286,7 @@ function readwind(windfilename, buses, loadscale)
         push!(farms, Farm(int(id), loadscale*float(mean), loadscale*float(std)))
         println("farm $i : $id $mean $std")
     end
-    
+
     for i in 1:numfarms
         setfarm(buses[farms[i].node],i)
     end
