@@ -15,8 +15,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 # Define packages to be used:
 using JuMP # Optimization package
 using JuMPChance # Chance constraints package
-# using Gurobi # Solver, could be altered if needed
-using Mosek # Solver, could be altered if needed
+using Gurobi # Solver, could be altered if needed
 using MAT # Package to interface with .mat files
 
 # Include the file with input data functions
@@ -35,8 +34,7 @@ function solve_ccopf(logfilename, refbus, line_probability_threshold, gen_probab
     const VoLL = 10_000 # Value of lost load
 
     # Define the name of the model and solver settings
-    # m = ChanceModel(solver=GurobiSolver(Method=1,BarHomogeneous=1))
-    m = ChanceModel(solver=MosekSolver())
+    m = ChanceModel(solver=GurobiSolver(Method=1,BarHomogeneous=1))
 
     # Define variables:
     # Non-negative hourly average power output bounded by the maximum limit on each generator:
@@ -119,22 +117,21 @@ function solve_ccopf(logfilename, refbus, line_probability_threshold, gen_probab
             ccexpr += fexpr*winderr[j]
         end
         prob_threshold = (i in loaded_lines_idx) ? loaded_lines_probability_threshold : line_probability_threshold
-
         # Formulate chance constraints for the + and - transmission limits:
-        @constraint(m, barf[i] + lines[i].y*ccexpr >= getThermalCapacity(lines[i], mvaBase)*(1-linebufferamt), with_probability=1-prob_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
-        @constraint(m, barf[i] + lines[i].y*ccexpr <= -getThermalCapacity(lines[i], mvaBase), with_probability= 1-prob_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
+        @constraint(m, barf[i] + lines[i].y*ccexpr <= getThermalCapacity(lines[i], mvaBase)*(1-linebufferamt), with_probability=1-prob_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
+        @constraint(m, barf[i] + lines[i].y*ccexpr >= -getThermalCapacity(lines[i], mvaBase), with_probability= 1-prob_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
     end
 
     # Chance constraints for the maximum output of generators:
     sum_deviations = sum([winderr[i] for i in 1:numfarms])
     for i in generatorlist
-        @constraint(m, pbar[i] - sum_deviations*alpha[i] >= buses[i].Pgmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
+        @constraint(m, pbar[i] - sum_deviations*alpha[i] <= buses[i].Pgmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
     end
 
     # Chance constraints on the upward (+) and downward(-) ramping:
     for (bus_idx, rampmax) in ramp
-        @constraint(m, -sum_deviations*alpha[bus_idx] >= rampmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
-        @constraint(m, -sum_deviations*alpha[bus_idx] <= -rampmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
+        @constraint(m, -sum_deviations*alpha[bus_idx] <= rampmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
+        @constraint(m, -sum_deviations*alpha[bus_idx] >= -rampmax, with_probability=1-gen_probability_threshold, uncertainty_budget_mean=Γ, uncertainty_budget_variance=Γ)
     end
 
 
@@ -144,16 +141,14 @@ function solve_ccopf(logfilename, refbus, line_probability_threshold, gen_probab
 
 
     tic() # track the execution time
-    status = solve(m,method=:Cuts, debug=false)
-    # status = solve(m,method=:Reformulate, debug=true)
-    #status = solvechance(m,method=:Cuts, debug=false) # Solve the model
+    status = solve(m,method=:Cuts, debug=false) # Solve the model
     solvetime = toq() # record the execution time
     if status != :Optimal
         # if the model isn't solved optimally, return NaNs
         return status, NaN, solvetime, fill(NaN, numbuses), fill(NaN, numbuses), fill(NaN, numlines), fill(NaN, numbuses-1)
     end
     # Return the optimal values if the model is solved optimally
-    return status, getObjectiveValue(m), solvetime, getValue(alpha), getValue(pbar), getValue(barf), getValue(slack_bus)
+    return status, getobjectivevalue(m), solvetime, getvalue(alpha), getvalue(pbar), getvalue(barf), getvalue(slack_bus)
 
 end
 
